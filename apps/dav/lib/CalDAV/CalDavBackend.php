@@ -145,6 +145,9 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 * @var array
 	 * @psalm-var array<string, string[]>
 	 */
+	public const DEFAULT_ALARMS_PART_DAY_PROPERTY = '{' . \OCA\DAV\DAV\Sharing\Plugin::NS_NEXTCLOUD . '}default-alarms-part-day';
+	public const DEFAULT_ALARMS_FULL_DAY_PROPERTY = '{' . \OCA\DAV\DAV\Sharing\Plugin::NS_NEXTCLOUD . '}default-alarms-full-day';
+
 	public array $propertyMap = [
 		'{DAV:}displayname' => ['displayname', 'string'],
 		'{urn:ietf:params:xml:ns:caldav}calendar-description' => ['description', 'string'],
@@ -326,7 +329,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 		return $this->atomic(function () use ($principalUri) {
 			$principalUriOriginal = $principalUri;
 			$principalUri = $this->convertPrincipal($principalUri, true);
-			$fields = array_column($this->propertyMap, 0);
+			$fields = $this->getCalendarSelectFields();
 			$fields[] = 'id';
 			$fields[] = 'uri';
 			$fields[] = 'synctoken';
@@ -382,10 +385,9 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 			$principals = array_merge($principals, $this->principalBackend->getCircleMembership($principalUriOriginal));
 			$principals[] = $principalUri;
 
-			$fields = array_column($this->propertyMap, 0);
 			$fields = array_map(function (string $field) {
 				return 'a.' . $field;
-			}, $fields);
+			}, $this->getCalendarSelectFields());
 			$fields[] = 'a.id';
 			$fields[] = 'a.uri';
 			$fields[] = 'a.synctoken';
@@ -468,7 +470,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 */
 	public function getUsersOwnCalendars($principalUri) {
 		$principalUri = $this->convertPrincipal($principalUri, true);
-		$fields = array_column($this->propertyMap, 0);
+		$fields = $this->getCalendarSelectFields();
 		$fields[] = 'id';
 		$fields[] = 'uri';
 		$fields[] = 'synctoken';
@@ -514,7 +516,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 * @return array
 	 */
 	public function getPublicCalendars() {
-		$fields = array_column($this->propertyMap, 0);
+		$fields = array_map(static fn (string $field): string => 'a.' . $field, $this->getCalendarSelectFields());
 		$fields[] = 'a.id';
 		$fields[] = 'a.uri';
 		$fields[] = 'a.synctoken';
@@ -572,7 +574,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 * @throws NotFound
 	 */
 	public function getPublicCalendar($uri) {
-		$fields = array_column($this->propertyMap, 0);
+		$fields = array_map(static fn (string $field): string => 'a.' . $field, $this->getCalendarSelectFields());
 		$fields[] = 'a.id';
 		$fields[] = 'a.uri';
 		$fields[] = 'a.synctoken';
@@ -631,7 +633,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 * @return array|null
 	 */
 	public function getCalendarByUri($principal, $uri) {
-		$fields = array_column($this->propertyMap, 0);
+		$fields = $this->getCalendarSelectFields();
 		$fields[] = 'id';
 		$fields[] = 'uri';
 		$fields[] = 'synctoken';
@@ -681,7 +683,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 * @return array|null
 	 */
 	public function getCalendarById(int $calendarId): ?array {
-		$fields = array_column($this->propertyMap, 0);
+		$fields = $this->getCalendarSelectFields();
 		$fields[] = 'id';
 		$fields[] = 'uri';
 		$fields[] = 'synctoken';
@@ -850,7 +852,27 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 		foreach ($this->propertyMap as $xmlName => [$dbName, $type]) {
 			if (isset($properties[$xmlName])) {
 				$values[$dbName] = $properties[$xmlName];
+				if ($dbName === 'default_alarm_pday') {
+					$values['default_alarms_pday'] = DefaultCalendarAlarms::encodeFromLegacyInt(
+						$properties[$xmlName] !== null ? (int)$properties[$xmlName] : null,
+					);
+				} elseif ($dbName === 'default_alarm_fday') {
+					$values['default_alarms_fday'] = DefaultCalendarAlarms::encodeFromLegacyInt(
+						$properties[$xmlName] !== null ? (int)$properties[$xmlName] : null,
+					);
+				}
 			}
+		}
+
+		if (isset($properties[self::DEFAULT_ALARMS_PART_DAY_PROPERTY])) {
+			$encoded = DefaultCalendarAlarms::validateAndEncode($properties[self::DEFAULT_ALARMS_PART_DAY_PROPERTY]);
+			$values['default_alarms_pday'] = $encoded;
+			$values['default_alarm_pday'] = DefaultCalendarAlarms::legacyIntFromJson($encoded);
+		}
+		if (isset($properties[self::DEFAULT_ALARMS_FULL_DAY_PROPERTY])) {
+			$encoded = DefaultCalendarAlarms::validateAndEncode($properties[self::DEFAULT_ALARMS_FULL_DAY_PROPERTY]);
+			$values['default_alarms_fday'] = $encoded;
+			$values['default_alarm_fday'] = DefaultCalendarAlarms::legacyIntFromJson($encoded);
 		}
 
 		[$calendarId, $calendarData] = $this->atomic(function () use ($values) {
@@ -891,6 +913,8 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	public function updateCalendar($calendarId, PropPatch $propPatch) {
 		$supportedProperties = array_keys($this->propertyMap);
 		$supportedProperties[] = '{' . Plugin::NS_CALDAV . '}schedule-calendar-transp';
+		$supportedProperties[] = self::DEFAULT_ALARMS_PART_DAY_PROPERTY;
+		$supportedProperties[] = self::DEFAULT_ALARMS_FULL_DAY_PROPERTY;
 
 		$propPatch->handle($supportedProperties, function ($mutations) use ($calendarId) {
 			$newValues = [];
@@ -900,9 +924,28 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 						$fieldName = 'transparent';
 						$newValues[$fieldName] = (int)($propertyValue->getValue() === 'transparent');
 						break;
+					case self::DEFAULT_ALARMS_PART_DAY_PROPERTY:
+						$encoded = DefaultCalendarAlarms::validateAndEncode($propertyValue);
+						$newValues['default_alarms_pday'] = $encoded;
+						$newValues['default_alarm_pday'] = DefaultCalendarAlarms::legacyIntFromJson($encoded);
+						break;
+					case self::DEFAULT_ALARMS_FULL_DAY_PROPERTY:
+						$encoded = DefaultCalendarAlarms::validateAndEncode($propertyValue);
+						$newValues['default_alarms_fday'] = $encoded;
+						$newValues['default_alarm_fday'] = DefaultCalendarAlarms::legacyIntFromJson($encoded);
+						break;
 					default:
 						$fieldName = $this->propertyMap[$propertyName][0];
 						$newValues[$fieldName] = $propertyValue;
+						if ($fieldName === 'default_alarm_pday') {
+							$newValues['default_alarms_pday'] = DefaultCalendarAlarms::encodeFromLegacyInt(
+								$propertyValue !== null ? (int)$propertyValue : null,
+							);
+						} elseif ($fieldName === 'default_alarm_fday') {
+							$newValues['default_alarms_fday'] = DefaultCalendarAlarms::encodeFromLegacyInt(
+								$propertyValue !== null ? (int)$propertyValue : null,
+							);
+						}
 						break;
 				}
 			}
@@ -3968,7 +4011,27 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 			}
 			$calendar[$xmlName] = $value;
 		}
+
+		$calendar[self::DEFAULT_ALARMS_PART_DAY_PROPERTY] = DefaultCalendarAlarms::formatForCalDav(
+			isset($row['default_alarms_pday']) ? (string)$row['default_alarms_pday'] : null,
+			isset($row['default_alarm_pday']) && $row['default_alarm_pday'] !== null ? (int)$row['default_alarm_pday'] : null,
+		);
+		$calendar[self::DEFAULT_ALARMS_FULL_DAY_PROPERTY] = DefaultCalendarAlarms::formatForCalDav(
+			isset($row['default_alarms_fday']) ? (string)$row['default_alarms_fday'] : null,
+			isset($row['default_alarm_fday']) && $row['default_alarm_fday'] !== null ? (int)$row['default_alarm_fday'] : null,
+		);
+
 		return $calendar;
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private function getCalendarSelectFields(): array {
+		return array_merge(
+			array_column($this->propertyMap, 0),
+			['default_alarms_pday', 'default_alarms_fday'],
+		);
 	}
 
 	/**
