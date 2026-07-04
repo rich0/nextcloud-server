@@ -24,6 +24,7 @@ class DefaultCalendarAlarms {
 
 	/**
 	 * @throws BadRequest
+	 * @throws \RuntimeException
 	 */
 	public static function validateAndEncode(mixed $value): ?string {
 		if ($value === null || $value === '') {
@@ -56,7 +57,7 @@ class DefaultCalendarAlarms {
 		try {
 			return json_encode($normalized, JSON_THROW_ON_ERROR);
 		} catch (JsonException $e) {
-			throw new BadRequest('Default alarms must be valid JSON', 0, $e);
+			throw new \RuntimeException('Internal error encoding default alarms', 0, $e);
 		}
 	}
 
