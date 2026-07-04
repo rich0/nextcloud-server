@@ -78,17 +78,7 @@ class DefaultCalendarAlarms {
 			}
 		}
 
-		if ($legacyInt !== null) {
-			try {
-				return json_encode([
-					['trigger' => $legacyInt, 'action' => 'DISPLAY'],
-				], JSON_THROW_ON_ERROR);
-			} catch (JsonException) {
-				return null;
-			}
-		}
-
-		return null;
+		return self::encodeFromLegacyInt($legacyInt);
 	}
 
 	public static function legacyIntFromJson(?string $json): ?int {
