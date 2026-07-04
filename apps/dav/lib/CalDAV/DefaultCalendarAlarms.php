@@ -119,6 +119,49 @@ class DefaultCalendarAlarms {
 	}
 
 	/**
+	 * Applies a legacy single-int update without discarding additional stored alarms.
+	 *
+	 * Updates the first alarm's trigger (preserving its action when present).
+	 * Falls back to a single DISPLAY alarm when no JSON list exists yet.
+	 */
+	public static function mergeLegacyIntIntoJson(?string $existingJson, ?int $legacyInt): ?string {
+		if ($legacyInt === null) {
+			return null;
+		}
+
+		if ($existingJson === null || $existingJson === '') {
+			return self::encodeFromLegacyInt($legacyInt);
+		}
+
+		try {
+			/** @var mixed $decoded */
+			$decoded = json_decode($existingJson, true, 512, JSON_THROW_ON_ERROR);
+			if (!is_array($decoded) || $decoded === []) {
+				return self::encodeFromLegacyInt($legacyInt);
+			}
+
+			$first = $decoded[0];
+			if (!is_array($first)) {
+				return self::encodeFromLegacyInt($legacyInt);
+			}
+
+			$action = 'DISPLAY';
+			if (isset($first['action']) && is_string($first['action']) && in_array($first['action'], self::ALLOWED_ACTIONS, true)) {
+				$action = $first['action'];
+			}
+
+			$decoded[0] = [
+				'trigger' => $legacyInt,
+				'action' => $action,
+			];
+
+			return json_encode($decoded, JSON_THROW_ON_ERROR);
+		} catch (JsonException) {
+			return self::encodeFromLegacyInt($legacyInt);
+		}
+	}
+
+	/**
 	 * @param array<int, mixed> $alarms
 	 * @return list<array{trigger: int, action: string}>
 	 * @throws BadRequest
