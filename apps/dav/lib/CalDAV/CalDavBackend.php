@@ -148,6 +148,12 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	public const DEFAULT_ALARMS_PART_DAY_PROPERTY = '{' . \OCA\DAV\DAV\Sharing\Plugin::NS_NEXTCLOUD . '}default-alarms-part-day';
 	public const DEFAULT_ALARMS_FULL_DAY_PROPERTY = '{' . \OCA\DAV\DAV\Sharing\Plugin::NS_NEXTCLOUD . '}default-alarms-full-day';
 
+	/** @var string[] DB columns for calendar properties outside propertyMap (custom serialization). */
+	private const SERIALIZED_CALENDAR_DB_COLUMNS = [
+		'default_alarms_pday',
+		'default_alarms_fday',
+	];
+
 	public array $propertyMap = [
 		'{DAV:}displayname' => ['displayname', 'string'],
 		'{urn:ietf:params:xml:ns:caldav}calendar-description' => ['description', 'string'],
@@ -329,7 +335,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 		return $this->atomic(function () use ($principalUri) {
 			$principalUriOriginal = $principalUri;
 			$principalUri = $this->convertPrincipal($principalUri, true);
-			$fields = $this->getCalendarSelectFields();
+			$fields = $this->getCalendarMergeSerializedProperties();
 			$fields[] = 'id';
 			$fields[] = 'uri';
 			$fields[] = 'synctoken';
@@ -387,7 +393,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 
 			$fields = array_map(function (string $field) {
 				return 'a.' . $field;
-			}, $this->getCalendarSelectFields());
+			}, $this->getCalendarMergeSerializedProperties());
 			$fields[] = 'a.id';
 			$fields[] = 'a.uri';
 			$fields[] = 'a.synctoken';
@@ -470,7 +476,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 */
 	public function getUsersOwnCalendars($principalUri) {
 		$principalUri = $this->convertPrincipal($principalUri, true);
-		$fields = $this->getCalendarSelectFields();
+		$fields = $this->getCalendarMergeSerializedProperties();
 		$fields[] = 'id';
 		$fields[] = 'uri';
 		$fields[] = 'synctoken';
@@ -516,7 +522,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 * @return array
 	 */
 	public function getPublicCalendars() {
-		$fields = array_map(static fn (string $field): string => 'a.' . $field, $this->getCalendarSelectFields());
+		$fields = array_map(static fn (string $field): string => 'a.' . $field, $this->getCalendarMergeSerializedProperties());
 		$fields[] = 'a.id';
 		$fields[] = 'a.uri';
 		$fields[] = 'a.synctoken';
@@ -574,7 +580,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 * @throws NotFound
 	 */
 	public function getPublicCalendar($uri) {
-		$fields = array_map(static fn (string $field): string => 'a.' . $field, $this->getCalendarSelectFields());
+		$fields = array_map(static fn (string $field): string => 'a.' . $field, $this->getCalendarMergeSerializedProperties());
 		$fields[] = 'a.id';
 		$fields[] = 'a.uri';
 		$fields[] = 'a.synctoken';
@@ -633,7 +639,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 * @return array|null
 	 */
 	public function getCalendarByUri($principal, $uri) {
-		$fields = $this->getCalendarSelectFields();
+		$fields = $this->getCalendarMergeSerializedProperties();
 		$fields[] = 'id';
 		$fields[] = 'uri';
 		$fields[] = 'synctoken';
@@ -683,7 +689,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	 * @return array|null
 	 */
 	public function getCalendarById(int $calendarId): ?array {
-		$fields = $this->getCalendarSelectFields();
+		$fields = $this->getCalendarMergeSerializedProperties();
 		$fields[] = 'id';
 		$fields[] = 'uri';
 		$fields[] = 'synctoken';
@@ -917,7 +923,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 		$supportedProperties[] = self::DEFAULT_ALARMS_FULL_DAY_PROPERTY;
 
 		$propPatch->handle($supportedProperties, function ($mutations) use ($calendarId) {
-			$storedDefaultAlarms = $this->getStoredDefaultAlarms($calendarId);
+			$storedDefaultAlarmsJson = $this->getCalendarDefaultAlarmsJson($calendarId);
 			$newValues = [];
 			foreach ($mutations as $propertyName => $propertyValue) {
 				switch ($propertyName) {
@@ -940,12 +946,12 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 						$newValues[$fieldName] = $propertyValue;
 						if ($fieldName === 'default_alarm_pday') {
 							$newValues['default_alarms_pday'] = DefaultCalendarAlarms::mergeLegacyIntIntoJson(
-								$storedDefaultAlarms['default_alarms_pday'],
+								$storedDefaultAlarmsJson['default_alarms_pday'],
 								$propertyValue !== null ? (int)$propertyValue : null,
 							);
 						} elseif ($fieldName === 'default_alarm_fday') {
 							$newValues['default_alarms_fday'] = DefaultCalendarAlarms::mergeLegacyIntIntoJson(
-								$storedDefaultAlarms['default_alarms_fday'],
+								$storedDefaultAlarmsJson['default_alarms_fday'],
 								$propertyValue !== null ? (int)$propertyValue : null,
 							);
 						}
@@ -4028,19 +4034,22 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	}
 
 	/**
+	 * calendars-table SELECT columns: propertyMap DB fields plus columns for
+	 * CalDAV properties stored outside propertyMap (custom serialization).
+	 *
 	 * @return string[]
 	 */
-	private function getCalendarSelectFields(): array {
+	private function getCalendarMergeSerializedProperties(): array {
 		return array_merge(
 			array_column($this->propertyMap, 0),
-			['default_alarms_pday', 'default_alarms_fday'],
+			self::SERIALIZED_CALENDAR_DB_COLUMNS,
 		);
 	}
 
 	/**
 	 * @return array{default_alarms_pday: ?string, default_alarms_fday: ?string}
 	 */
-	private function getStoredDefaultAlarms(int $calendarId): array {
+	private function getCalendarDefaultAlarmsJson(int $calendarId): array {
 		$query = $this->db->getQueryBuilder();
 		$query->select('default_alarms_pday', 'default_alarms_fday')
 			->from('calendars')
