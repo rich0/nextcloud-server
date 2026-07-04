@@ -1960,6 +1960,12 @@ EOD;
 		$this->assertCount(1, $calendars);
 		$this->assertEquals(-900, $calendars[0]['{http://nextcloud.com/ns}default-alarm-part-day']);
 		$this->assertEquals(-3600, $calendars[0]['{http://nextcloud.com/ns}default-alarm-full-day']);
+		$this->assertEquals(json_encode([
+			['trigger' => -900, 'action' => 'DISPLAY'],
+		], JSON_THROW_ON_ERROR), $calendars[0][CalDavBackend::DEFAULT_ALARMS_PART_DAY_PROPERTY]);
+		$this->assertEquals(json_encode([
+			['trigger' => -3600, 'action' => 'DISPLAY'],
+		], JSON_THROW_ON_ERROR), $calendars[0][CalDavBackend::DEFAULT_ALARMS_FULL_DAY_PROPERTY]);
 
 		// Test updating to different values
 		$patch = new PropPatch([
@@ -1972,6 +1978,12 @@ EOD;
 		$calendars = $this->backend->getCalendarsForUser(self::UNIT_TEST_USER);
 		$this->assertEquals(-86400, $calendars[0]['{http://nextcloud.com/ns}default-alarm-part-day']);
 		$this->assertEquals(-43200, $calendars[0]['{http://nextcloud.com/ns}default-alarm-full-day']);
+		$this->assertEquals(json_encode([
+			['trigger' => -86400, 'action' => 'DISPLAY'],
+		], JSON_THROW_ON_ERROR), $calendars[0][CalDavBackend::DEFAULT_ALARMS_PART_DAY_PROPERTY]);
+		$this->assertEquals(json_encode([
+			['trigger' => -43200, 'action' => 'DISPLAY'],
+		], JSON_THROW_ON_ERROR), $calendars[0][CalDavBackend::DEFAULT_ALARMS_FULL_DAY_PROPERTY]);
 
 		// Test setting to null
 		$patch = new PropPatch([
@@ -1984,6 +1996,8 @@ EOD;
 		$calendars = $this->backend->getCalendarsForUser(self::UNIT_TEST_USER);
 		$this->assertNull($calendars[0]['{http://nextcloud.com/ns}default-alarm-part-day']);
 		$this->assertNull($calendars[0]['{http://nextcloud.com/ns}default-alarm-full-day']);
+		$this->assertNull($calendars[0][CalDavBackend::DEFAULT_ALARMS_PART_DAY_PROPERTY]);
+		$this->assertNull($calendars[0][CalDavBackend::DEFAULT_ALARMS_FULL_DAY_PROPERTY]);
 
 		// Clean up
 		$this->backend->deleteCalendar($calendars[0]['id'], true);
