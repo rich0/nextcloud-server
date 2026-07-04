@@ -2012,6 +2012,23 @@ EOD;
 		$this->assertEquals(-86400, $calendars[0]['{http://nextcloud.com/ns}default-alarm-part-day']);
 		$this->assertEquals(-3600, $calendars[0]['{http://nextcloud.com/ns}default-alarm-full-day']);
 
+		// Legacy client update should adjust only the first alarm, not wipe the list
+		$patch = new PropPatch([
+			'{http://nextcloud.com/ns}default-alarm-part-day' => -1800,
+		]);
+		$this->backend->updateCalendar($calendarId, $patch);
+		$patch->commit();
+
+		$calendars = $this->backend->getCalendarsForUser(self::UNIT_TEST_USER);
+		$this->assertEquals(json_encode([
+			['trigger' => -1800, 'action' => 'EMAIL'],
+			['trigger' => -900, 'action' => 'DISPLAY'],
+		], JSON_THROW_ON_ERROR), $calendars[0][CalDavBackend::DEFAULT_ALARMS_PART_DAY_PROPERTY]);
+		$this->assertEquals(-1800, $calendars[0]['{http://nextcloud.com/ns}default-alarm-part-day']);
+		$this->assertEquals(json_encode([
+			['trigger' => -3600, 'action' => 'EMAIL'],
+		], JSON_THROW_ON_ERROR), $calendars[0][CalDavBackend::DEFAULT_ALARMS_FULL_DAY_PROPERTY]);
+
 		$patch = new PropPatch([
 			CalDavBackend::DEFAULT_ALARMS_PART_DAY_PROPERTY => null,
 			CalDavBackend::DEFAULT_ALARMS_FULL_DAY_PROPERTY => null,

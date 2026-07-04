@@ -917,6 +917,7 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 		$supportedProperties[] = self::DEFAULT_ALARMS_FULL_DAY_PROPERTY;
 
 		$propPatch->handle($supportedProperties, function ($mutations) use ($calendarId) {
+			$storedDefaultAlarms = $this->getStoredDefaultAlarms($calendarId);
 			$newValues = [];
 			foreach ($mutations as $propertyName => $propertyValue) {
 				switch ($propertyName) {
@@ -938,11 +939,13 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 						$fieldName = $this->propertyMap[$propertyName][0];
 						$newValues[$fieldName] = $propertyValue;
 						if ($fieldName === 'default_alarm_pday') {
-							$newValues['default_alarms_pday'] = DefaultCalendarAlarms::encodeFromLegacyInt(
+							$newValues['default_alarms_pday'] = DefaultCalendarAlarms::mergeLegacyIntIntoJson(
+								$storedDefaultAlarms['default_alarms_pday'],
 								$propertyValue !== null ? (int)$propertyValue : null,
 							);
 						} elseif ($fieldName === 'default_alarm_fday') {
-							$newValues['default_alarms_fday'] = DefaultCalendarAlarms::encodeFromLegacyInt(
+							$newValues['default_alarms_fday'] = DefaultCalendarAlarms::mergeLegacyIntIntoJson(
+								$storedDefaultAlarms['default_alarms_fday'],
 								$propertyValue !== null ? (int)$propertyValue : null,
 							);
 						}
@@ -4032,6 +4035,30 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 			array_column($this->propertyMap, 0),
 			['default_alarms_pday', 'default_alarms_fday'],
 		);
+	}
+
+	/**
+	 * @return array{default_alarms_pday: ?string, default_alarms_fday: ?string}
+	 */
+	private function getStoredDefaultAlarms(int $calendarId): array {
+		$query = $this->db->getQueryBuilder();
+		$query->select('default_alarms_pday', 'default_alarms_fday')
+			->from('calendars')
+			->where($query->expr()->eq('id', $query->createNamedParameter($calendarId, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+		$row = $query->executeQuery()->fetchAssociative();
+
+		if ($row === false) {
+			return [
+				'default_alarms_pday' => null,
+				'default_alarms_fday' => null,
+			];
+		}
+
+		return [
+			'default_alarms_pday' => $row['default_alarms_pday'] !== null ? (string)$row['default_alarms_pday'] : null,
+			'default_alarms_fday' => $row['default_alarms_fday'] !== null ? (string)$row['default_alarms_fday'] : null,
+		];
 	}
 
 	/**
