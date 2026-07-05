@@ -18,8 +18,6 @@ use Sabre\DAV\Exception\BadRequest;
  * Each entry: {"trigger": <int seconds>, "action": "DISPLAY"|"EMAIL"}
  */
 class DefaultCalendarAlarms {
-	public const MAX_ALARMS = 10;
-
 	private const ALLOWED_ACTIONS = ['DISPLAY', 'EMAIL'];
 
 	/**
@@ -168,10 +166,6 @@ class DefaultCalendarAlarms {
 	 * @throws BadRequest
 	 */
 	private static function normalizeDecodedArray(array $alarms): array {
-		if (count($alarms) > self::MAX_ALARMS) {
-			throw new BadRequest('Too many default alarms');
-		}
-
 		$normalized = [];
 		foreach ($alarms as $alarm) {
 			if (!is_array($alarm)) {
