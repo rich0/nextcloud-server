@@ -8,6 +8,8 @@ declare(strict_types=1);
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+// CI smoke: verify fork GitHub Actions (safe to remove after PR # closes).
+
 use OCP\App\IAppManager;
 use OCP\Server;
 
