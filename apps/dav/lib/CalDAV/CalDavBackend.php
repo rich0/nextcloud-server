@@ -138,13 +138,6 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 	public const CLASSIFICATION_PRIVATE = 1;
 	public const CLASSIFICATION_CONFIDENTIAL = 2;
 
-	/**
-	 * List of CalDAV properties, and how they map to database field names and their type
-	 * Add your own properties by simply adding on to this array.
-	 *
-	 * @var array
-	 * @psalm-var array<string, string[]>
-	 */
 	public const DEFAULT_ALARMS_PART_DAY_PROPERTY = '{' . \OCA\DAV\DAV\Sharing\Plugin::NS_NEXTCLOUD . '}default-alarms-part-day';
 	public const DEFAULT_ALARMS_FULL_DAY_PROPERTY = '{' . \OCA\DAV\DAV\Sharing\Plugin::NS_NEXTCLOUD . '}default-alarms-full-day';
 
@@ -154,6 +147,13 @@ class CalDavBackend extends AbstractBackend implements SyncSupport, Subscription
 		'default_alarms_fday',
 	];
 
+	/**
+	 * List of CalDAV properties, and how they map to database field names and their type
+	 * Add your own properties by simply adding on to this array.
+	 *
+	 * @var array
+	 * @psalm-var array<string, string[]>
+	 */
 	public array $propertyMap = [
 		'{DAV:}displayname' => ['displayname', 'string'],
 		'{urn:ietf:params:xml:ns:caldav}calendar-description' => ['description', 'string'],
