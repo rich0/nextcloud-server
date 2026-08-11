@@ -411,6 +411,8 @@ class ComposerStaticInitDAV
         'OCA\\DAV\\Migration\\Version1036Date20251202000000' => __DIR__ . '/..' . '/../lib/Migration/Version1036Date20251202000000.php',
         'OCA\\DAV\\Migration\\Version1038Date20260302000000' => __DIR__ . '/..' . '/../lib/Migration/Version1038Date20260302000000.php',
         'OCA\\DAV\\Migration\\Version1039Date20260408000000' => __DIR__ . '/..' . '/../lib/Migration/Version1039Date20260408000000.php',
+        'OCA\\DAV\\Migration\\Version1040Date20260703120000' => __DIR__ . '/..' . '/../lib/Migration/Version1040Date20260703120000.php',
+        'OCA\\DAV\\Migration\\Version1041Date20260703120100' => __DIR__ . '/..' . '/../lib/Migration/Version1041Date20260703120100.php',
         'OCA\\DAV\\Model\\ExampleEvent' => __DIR__ . '/..' . '/../lib/Model/ExampleEvent.php',
         'OCA\\DAV\\Paginate\\LimitedCopyIterator' => __DIR__ . '/..' . '/../lib/Paginate/LimitedCopyIterator.php',
         'OCA\\DAV\\Paginate\\PaginateCache' => __DIR__ . '/..' . '/../lib/Paginate/PaginateCache.php',
